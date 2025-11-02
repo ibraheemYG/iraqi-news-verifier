@@ -1,19 +1,17 @@
 # config.py
+import os
 
 # 1. Telegram API Credentials
-# IMPORTANT: Keep this file secret. Do not share it publicly.
-TG_API_ID = 21280170
-TG_API_HASH = 'fb5d301280108b2229349120c3708c97'
+# IMPORTANT: Use environment variables in production!
+TG_API_ID = int(os.getenv('TELEGRAM_API_ID', '0'))
+TG_API_HASH = os.getenv('TELEGRAM_API_HASH', '')
 
-# 1.b External News APIs (keep secret)
-# NewsAPI.org API Key
-NEWSAPI_KEY = 'f1d489d1c0e8475bb3653d4e6e629acb'
-# NewsData.io API Key
-NEWSDATA_API_KEY = 'pub_98f0b45800be407c8673160f32e51949'
+# 1.b External News APIs
+NEWSAPI_KEY = os.getenv('NEWSAPI_KEY', '')
+NEWSDATA_API_KEY = os.getenv('NEWSDATA_API_KEY', '')
 
 # 1.c Gemini (Google Generative AI)
-# Prefer reading from env GEMINI_API_KEY in production; kept here as per user request
-GEMINI_API_KEY = 'AIzaSyBSBQ3nIkvlu-Ebix0P_uEpdUT-76HTfI0'
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 
 # 2. Trusted Telegram Channels
 # Add the usernames of the public channels you want to use as your knowledge base.
