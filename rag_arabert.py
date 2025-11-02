@@ -103,14 +103,13 @@ def generate_response(user_query: str, retrieved_context: List[Dict], is_relevan
     if GEMINI_API_KEY and genai is not None:
         try:
             genai.configure(api_key=GEMINI_API_KEY)
-            # Use stable Gemini model names
-            # Try multiple model names for compatibility
+            # Use CORRECT model names for Gemini API v1beta
+            # Reference: https://ai.google.dev/gemini-api/docs/models/gemini
             gemini_models = [
                 os.getenv("GEMINI_MODEL"),  # Custom if provided
-                "gemini-1.5-flash-latest",
-                "gemini-1.5-flash",
-                "gemini-pro",
-                "gemini-1.5-pro"  # Try Pro as last resort
+                "models/gemini-1.5-flash",
+                "models/gemini-1.5-pro",
+                "models/gemini-pro",
             ]
             
             for gemini_model in gemini_models:
@@ -143,7 +142,7 @@ def generate_response(user_query: str, retrieved_context: List[Dict], is_relevan
                         print(f"⚠ {err_msg}")
                         gemini_errors.append(err_msg)
                 except Exception as model_err:
-                    err_msg = f"{gemini_model}: {str(model_err)[:100]}"
+                    err_msg = f"{gemini_model}: {str(model_err)[:150]}"
                     print(f"⚠ Gemini model failed: {err_msg}")
                     gemini_errors.append(err_msg)
                     continue
