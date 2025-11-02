@@ -90,21 +90,36 @@ def generate_response(user_query: str, retrieved_context: List[Dict], is_relevan
     if GEMINI_API_KEY and genai is not None:
         try:
             genai.configure(api_key=GEMINI_API_KEY)
-            gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-            model = genai.GenerativeModel(gemini_model)
-            resp = model.generate_content(prompt)
-            content = getattr(resp, "text", None)
-            if not content and getattr(resp, "candidates", None):
-                parts = []
-                for c in resp.candidates:
-                    for p in getattr(c, "content", {}).get("parts", []):
-                        parts.append(str(p.get("text", "")))
-                content = "\n".join(parts)
-            if content:
-                print("✓ Response generated successfully via Gemini")
-                return content.strip(), is_question
-            else:
-                last_err = "Gemini returned empty response"
+            # Use stable Gemini model names
+            # Try multiple model names for compatibility
+            gemini_models = [
+                os.getenv("GEMINI_MODEL"),  # Custom if provided
+                "gemini-1.5-flash-latest",
+                "gemini-1.5-flash",
+                "gemini-pro"
+            ]
+            
+            for gemini_model in gemini_models:
+                if not gemini_model:
+                    continue
+                try:
+                    model = genai.GenerativeModel(gemini_model)
+                    resp = model.generate_content(prompt)
+                    content = getattr(resp, "text", None)
+                    if not content and getattr(resp, "candidates", None):
+                        parts = []
+                        for c in resp.candidates:
+                            for p in getattr(c, "content", {}).get("parts", []):
+                                parts.append(str(p.get("text", "")))
+                        content = "\n".join(parts)
+                    if content:
+                        print(f"✓ Response generated successfully via Gemini ({gemini_model})")
+                        return content.strip(), is_question
+                except Exception as model_err:
+                    print(f"⚠ Gemini model {gemini_model} failed: {model_err}")
+                    continue
+            
+            last_err = "All Gemini models failed"
         except Exception as e:
             last_err = f"Gemini error: {e}"
             print(f"⚠ Gemini failed: {e}")
