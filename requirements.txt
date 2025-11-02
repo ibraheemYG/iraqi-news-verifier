@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+streamlit
+requests
+ollama
+telethon
+transformers
+torch
+google-generativeai>=0.7
