@@ -4,14 +4,26 @@ from typing import List, Dict
 import ollama
 try:
     import google.generativeai as genai
-except Exception:
+    print("✓ google.generativeai imported successfully")
+except Exception as e:
     genai = None
+    print(f"⚠ Failed to import google.generativeai: {e}")
 
-try:
-    from config import GEMINI_API_KEY
-except Exception:
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# Always prioritize environment variables for API keys
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    try:
+        from config import GEMINI_API_KEY as CONFIG_KEY
+        GEMINI_API_KEY = CONFIG_KEY
+    except Exception:
+        pass
 
+# Debug: Check if key is loaded (show only first/last 4 chars for security)
+if GEMINI_API_KEY:
+    key_preview = f"{GEMINI_API_KEY[:4]}...{GEMINI_API_KEY[-4:]}" if len(GEMINI_API_KEY) > 8 else "***"
+    print(f"✓ GEMINI_API_KEY loaded: {key_preview}")
+else:
+    print("⚠ GEMINI_API_KEY not found!")
 
 def build_context_block(retrieved_context: List[Dict]) -> str:
     blocks = []
@@ -87,6 +99,7 @@ def generate_response(user_query: str, retrieved_context: List[Dict], is_relevan
     last_err = None
     
     # 1) Try Gemini first (required for cloud deployment)
+    gemini_errors = []
     if GEMINI_API_KEY and genai is not None:
         try:
             genai.configure(api_key=GEMINI_API_KEY)
@@ -96,15 +109,25 @@ def generate_response(user_query: str, retrieved_context: List[Dict], is_relevan
                 os.getenv("GEMINI_MODEL"),  # Custom if provided
                 "gemini-1.5-flash-latest",
                 "gemini-1.5-flash",
-                "gemini-pro"
+                "gemini-pro",
+                "gemini-1.5-pro"  # Try Pro as last resort
             ]
             
             for gemini_model in gemini_models:
                 if not gemini_model:
                     continue
                 try:
+                    print(f"🔄 Trying Gemini model: {gemini_model}")
                     model = genai.GenerativeModel(gemini_model)
-                    resp = model.generate_content(prompt)
+                    resp = model.generate_content(
+                        prompt,
+                        generation_config={
+                            "temperature": 0.1,
+                            "top_p": 0.8,
+                            "top_k": 40,
+                            "max_output_tokens": 500,
+                        }
+                    )
                     content = getattr(resp, "text", None)
                     if not content and getattr(resp, "candidates", None):
                         parts = []
@@ -115,13 +138,19 @@ def generate_response(user_query: str, retrieved_context: List[Dict], is_relevan
                     if content:
                         print(f"✓ Response generated successfully via Gemini ({gemini_model})")
                         return content.strip(), is_question
+                    else:
+                        err_msg = f"Empty response from {gemini_model}"
+                        print(f"⚠ {err_msg}")
+                        gemini_errors.append(err_msg)
                 except Exception as model_err:
-                    print(f"⚠ Gemini model {gemini_model} failed: {model_err}")
+                    err_msg = f"{gemini_model}: {str(model_err)[:100]}"
+                    print(f"⚠ Gemini model failed: {err_msg}")
+                    gemini_errors.append(err_msg)
                     continue
             
-            last_err = "All Gemini models failed"
+            last_err = f"All Gemini models failed:\n" + "\n".join(f"  - {e}" for e in gemini_errors[-3:])
         except Exception as e:
-            last_err = f"Gemini error: {e}"
+            last_err = f"Gemini configuration error: {e}"
             print(f"⚠ Gemini failed: {e}")
     else:
         last_err = "Gemini API key not configured"
