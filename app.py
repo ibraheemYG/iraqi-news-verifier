@@ -31,18 +31,35 @@ with st.sidebar:
     if st.button("جلب من تليجرام"):
         with st.spinner("جاري جلب الأخبار من تيليجرام..."):
             try:
-                from telegram_reader import fetch_telegram_content
-                result = fetch_telegram_content()
-                st.success(f"✅ {result}")
+                import asyncio
+                from telegram_reader import get_telegram_messages
+                from vector_store import upsert_articles
+                
+                # Run async function
+                articles = asyncio.run(get_telegram_messages(limit_per_channel=10))
+                
+                if articles:
+                    # Store in vector database
+                    upsert_articles(articles)
+                    st.success(f"✅ تم جلب وحفظ {len(articles)} خبر من تليجرام")
+                else:
+                    st.warning("⚠️ لم يتم العثور على أخبار جديدة")
             except Exception as e:
                 st.error(f"❌ خطأ في الجلب: {e}")
 
     if st.button("جلب من NewsAPI/NewsData"):
         with st.spinner("جاري جلب الأخبار من المصادر..."):
             try:
-                from scraper import fetch_news
-                result = fetch_news()
-                st.success(f"✅ {result}")
+                from news_fetchers import fetch_all_external
+                from vector_store import upsert_articles
+                
+                articles = fetch_all_external(limit_each=50)
+                
+                if articles:
+                    upsert_articles(articles)
+                    st.success(f"✅ تم جلب وحفظ {len(articles)} خبر من المصادر")
+                else:
+                    st.warning("⚠️ لم يتم العثور على أخبار جديدة")
             except Exception as e:
                 st.error(f"❌ خطأ في الجلب: {e}")
 

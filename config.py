@@ -5,6 +5,7 @@ import os
 # IMPORTANT: Use environment variables in production!
 TG_API_ID = int(os.getenv('TELEGRAM_API_ID', '0'))
 TG_API_HASH = os.getenv('TELEGRAM_API_HASH', '')
+TG_STRING_SESSION = os.getenv('TELEGRAM_STRING_SESSION', None)
 
 # 1.b External News APIs
 NEWSAPI_KEY = os.getenv('NEWSAPI_KEY', '')
@@ -41,5 +42,5 @@ TRUSTED_CHANNELS = [
     "BROTHERSIRQ",
 ]
 
-# Optional: if you generate a Telethon string session, put it here to skip manual login prompts
-TG_STRING_SESSION = None
+# Removed - moved to environment variable above
+# TG_STRING_SESSION = None
