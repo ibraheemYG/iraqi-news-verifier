@@ -1,6 +1,12 @@
 import streamlit as st
-import requests
-import time
+import os
+import sys
+
+# Add current directory to path for imports
+sys.path.insert(0, os.path.dirname(__file__))
+
+# Import RAG modules directly
+from rag_pipeline import RAGPipeline
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -9,10 +15,13 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- API Configuration ---
-API_URL = "http://127.0.0.1:8001/verify"
-POPULATE_TG_URL = "http://127.0.0.1:8001/populate-from-telegram"
-POPULATE_NEWS_URL = "http://127.0.0.1:8001/populate-from-news"
+# --- Initialize RAG Pipeline ---
+@st.cache_resource
+def get_rag_pipeline():
+    """Initialize RAG pipeline once and cache it"""
+    return RAGPipeline()
+
+rag = get_rag_pipeline()
 
 # --- Sidebar ---
 with st.sidebar:
@@ -20,38 +29,34 @@ with st.sidebar:
     st.info("تحديث قاعدة البيانات من تيليجرام والمصادر الإخبارية.")
     
     if st.button("جلب من تليجرام"):
-        with st.spinner("يتم بدء عملية الجلب بالخلفية..."):
+        with st.spinner("جاري جلب الأخبار من تيليجرام..."):
             try:
-                r = requests.post(POPULATE_TG_URL)
-                if r.status_code == 200:
-                    st.success(r.json().get("message", "تم البدء بالخلفية"))
-                else:
-                    st.error(f"فشل الطلب: {r.text}")
+                from telegram_reader import fetch_telegram_content
+                result = fetch_telegram_content()
+                st.success(f"✅ {result}")
             except Exception as e:
-                st.error(f"تعذر الاتصال بالخادم: {e}")
+                st.error(f"❌ خطأ في الجلب: {e}")
 
     if st.button("جلب من NewsAPI/NewsData"):
-        with st.spinner("يتم جلب الأخبار بالخلفية..."):
+        with st.spinner("جاري جلب الأخبار من المصادر..."):
             try:
-                r = requests.post(POPULATE_NEWS_URL)
-                if r.status_code == 200:
-                    st.success(r.json().get("message", "تم البدء بالخلفية"))
-                else:
-                    st.error(f"فشل الطلب: {r.text}")
+                from scraper import fetch_news
+                result = fetch_news()
+                st.success(f"✅ {result}")
             except Exception as e:
-                st.error(f"تعذر الاتصال بالخادم: {e}")
+                st.error(f"❌ خطأ في الجلب: {e}")
 
     st.markdown("---")
     
-    # Health Check
+    # Status Check
     try:
-        response = requests.get("http://127.0.0.1:8001/health")
-        if response.status_code == 200:
-            st.success("✅ الخادم متصل")
+        # Check if RAG is loaded
+        if rag:
+            st.success("✅ النظام جاهز")
         else:
-            st.error("❌ مشكلة في الاتصال بالخادم")
+            st.error("❌ خطأ في تحميل النظام")
     except:
-        st.error("❌ الخادم غير متصل")
+        st.error("❌ خطأ في النظام")
         
     st.markdown("---")
     st.markdown("Powered by RAG (AraBERT + Gemini), and Telethon.")
@@ -77,50 +82,44 @@ if verify_button:
     else:
         with st.spinner("...جاري التحقق من الخبر"):
             try:
-                payload = {"query_text": query_text}
-                response = requests.post(API_URL, json=payload)
+                # Call RAG pipeline directly (no API needed)
+                result = rag.verify_news(query_text)
                 
-                if response.status_code == 200:
-                    result = response.json()
-                    verdict = result.get("verdict", "")
-                    source_info = result.get("source")
-                    status = result.get("status", "unverified")
+                verdict = result.get("verdict", "")
+                source_info = result.get("source")
+                status = result.get("status", "unverified")
 
-                    # Display results in a new container
-                    with st.container(border=True):
-                        # Use the status field returned from the API
-                        if status == "verified":
-                            st.success("#### ✅ الخبر موثوق")
-                            if isinstance(source_info, dict) and source_info.get("url"):
-                                label = source_info.get("label", "المصدر")
-                                url = source_info.get("url")
-                                st.markdown(f"**المصدر:** [{label}]({url})")
-                        elif status == "answered":
-                            st.info("#### 📖 إجابة السؤال")
-                            if isinstance(source_info, dict) and source_info.get("url"):
-                                label = source_info.get("label", "المصدر")
-                                url = source_info.get("url")
-                                st.markdown(f"**المصدر الأقرب:** [{label}]({url})")
-                        elif status == "casual":
-                            st.info("#### 💬 رسالة عابرة")
-                        else:
-                            st.error("#### ⚠️ الخبر غير مؤكد")
-                        
-                        # Show details directly, but remove the first line if it contains emoji
-                        st.markdown("---")
-                        # Remove the redundant first line with emoji from verdict for cleaner UI
-                        verdict_lines = verdict.split('\n')
-                        if verdict_lines and ('✅' in verdict_lines[0] or '⚠️' in verdict_lines[0] or '📖' in verdict_lines[0]):
-                            verdict_clean = '\n'.join(verdict_lines[1:]).strip()
-                        else:
-                            verdict_clean = verdict
-                        
-                        if verdict_clean:
-                            st.write(verdict_clean)
-                else:
-                    st.error(f"حدث خطأ في الخادم: {response.text}")
+                # Display results in a new container
+                with st.container(border=True):
+                    # Use the status field returned from RAG
+                    if status == "verified":
+                        st.success("#### ✅ الخبر موثوق")
+                        if isinstance(source_info, dict) and source_info.get("url"):
+                            label = source_info.get("label", "المصدر")
+                            url = source_info.get("url")
+                            st.markdown(f"**المصدر:** [{label}]({url})")
+                    elif status == "answered":
+                        st.info("#### 📖 إجابة السؤال")
+                        if isinstance(source_info, dict) and source_info.get("url"):
+                            label = source_info.get("label", "المصدر")
+                            url = source_info.get("url")
+                            st.markdown(f"**المصدر الأقرب:** [{label}]({url})")
+                    elif status == "casual":
+                        st.info("#### 💬 رسالة عابرة")
+                    else:
+                        st.error("#### ⚠️ الخبر غير مؤكد")
+                    
+                    # Show details directly, but remove the first line if it contains emoji
+                    st.markdown("---")
+                    # Remove the redundant first line with emoji from verdict for cleaner UI
+                    verdict_lines = verdict.split('\n')
+                    if verdict_lines and ('✅' in verdict_lines[0] or '⚠️' in verdict_lines[0] or '📖' in verdict_lines[0]):
+                        verdict_clean = '\n'.join(verdict_lines[1:]).strip()
+                    else:
+                        verdict_clean = verdict
+                    
+                    if verdict_clean:
+                        st.write(verdict_clean)
 
-            except requests.exceptions.ConnectionError:
-                st.error("لا يمكن الاتصال بالخادم. هل قمت بتشغيل `api.py`؟")
             except Exception as e:
                 st.error(f"حدث خطأ غير متوقع: {e}")
