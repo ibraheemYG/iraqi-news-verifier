@@ -83,9 +83,10 @@ def generate_response(user_query: str, retrieved_context: List[Dict], is_relevan
 
     print(f"--- Sending prompt to LLM (Intent: {'Question' if is_question else 'Verification'}) ---")
 
-    # --- LLM Invocation (Gemini with Ollama fallback) ---
-    # ... (rest of the function is the same)
-    # 1) Try Gemini first if API key available
+    # --- LLM Invocation (Gemini Primary, Ollama fallback for local only) ---
+    last_err = None
+    
+    # 1) Try Gemini first (required for cloud deployment)
     if GEMINI_API_KEY and genai is not None:
         try:
             genai.configure(api_key=GEMINI_API_KEY)
@@ -97,35 +98,55 @@ def generate_response(user_query: str, retrieved_context: List[Dict], is_relevan
                 parts = []
                 for c in resp.candidates:
                     for p in getattr(c, "content", {}).get("parts", []):
-                        parts.append(str(p.get("text", ""))) # Ensure part is text
+                        parts.append(str(p.get("text", "")))
                 content = "\n".join(parts)
             if content:
+                print("✓ Response generated successfully via Gemini")
                 return content.strip(), is_question
+            else:
+                last_err = "Gemini returned empty response"
         except Exception as e:
-            last_err = e
-        else:
-            last_err = None
+            last_err = f"Gemini error: {e}"
+            print(f"⚠ Gemini failed: {e}")
+    else:
+        last_err = "Gemini API key not configured"
+        print("⚠ Gemini not available (no API key)")
 
-    # 2) Fallback to Ollama chain
-    forced = os.getenv("OLLAMA_MODEL")
-    preferred_models = [
-        forced if forced else "deepseek-v3.1:671b-cloud",
-        "gpt-oss:120b-cloud",
-        "llama3.2:1b",
-        "phi3:mini",
-    ]
+    # 2) Fallback to Ollama (local development only)
+    try:
+        forced = os.getenv("OLLAMA_MODEL")
+        preferred_models = [
+            forced if forced else "deepseek-v3.1:671b-cloud",
+            "gpt-oss:120b-cloud",
+            "llama3.2:1b",
+            "phi3:mini",
+        ]
 
-    last_err = None
-    for m in preferred_models:
-        try:
-            resp = ollama.chat(
-                model=m,
-                messages=[{"role": "user", "content": prompt}],
-                options={"temperature": 0.1, "num_predict": 300},
-            )
-            return resp["message"]["content"], is_question
-        except Exception as e:
-            last_err = e
-            continue
+        for m in preferred_models:
+            try:
+                resp = ollama.chat(
+                    model=m,
+                    messages=[{"role": "user", "content": prompt}],
+                    options={"temperature": 0.1, "num_predict": 300},
+                )
+                print(f"✓ Response generated via Ollama ({m})")
+                return resp["message"]["content"], is_question
+            except Exception as e:
+                continue
+    except Exception:
+        pass
 
-    return f"تعذر إنشاء الاستجابة من النماذج المتاحة: {last_err}", is_question
+    # 3) If both failed, return clear error message
+    error_msg = f"""⚠️ خطأ في النظام
+
+لم يتمكن النظام من الاتصال بخدمة الذكاء الاصطناعي.
+
+السبب المحتمل: {last_err}
+
+الحل:
+- تأكد من إضافة GEMINI_API_KEY في Secrets (Streamlit Cloud)
+- أو تأكد من وجود المفتاح في ملف .env محلياً
+
+يمكنك الحصول على مفتاح مجاني من: https://makersuite.google.com/app/apikey"""
+    
+    return error_msg, is_question
