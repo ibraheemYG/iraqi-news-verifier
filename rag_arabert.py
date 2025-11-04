@@ -25,6 +25,16 @@ if GEMINI_API_KEY:
 else:
     print("⚠ GEMINI_API_KEY not found!")
 
+
+def _normalize_gemini_model(name: str | None) -> str | None:
+    """Ensure model names include the correct API prefix."""
+    if not name:
+        return None
+    cleaned = name.strip()
+    if cleaned.startswith("models/") or cleaned.startswith("tunings/"):
+        return cleaned
+    return f"models/{cleaned}"
+
 def build_context_block(retrieved_context: List[Dict]) -> str:
     blocks = []
     for ctx in retrieved_context:
@@ -106,8 +116,9 @@ def generate_response(user_query: str, retrieved_context: List[Dict], is_relevan
             # Use CORRECT model names for Gemini API v1beta
             # Reference: https://ai.google.dev/gemini-api/docs/models/gemini
             gemini_models = [
-                os.getenv("GEMINI_MODEL"),  # Custom if provided
+                _normalize_gemini_model(os.getenv("GEMINI_MODEL")),
                 "models/gemini-1.5-flash",
+                "models/gemini-1.5-flash-latest",
                 "models/gemini-1.5-pro",
                 "models/gemini-pro",
             ]
@@ -189,6 +200,7 @@ def generate_response(user_query: str, retrieved_context: List[Dict], is_relevan
 الحل:
 - تأكد من إضافة GEMINI_API_KEY في Secrets (Streamlit Cloud)
 - أو تأكد من وجود المفتاح في ملف .env محلياً
+- إذا استخدمت متغير GEMINI_MODEL، احرص أن يكون بالشكل models/اسم_الموديل (مثال: models/gemini-1.5-flash)
 
 يمكنك الحصول على مفتاح مجاني من: https://makersuite.google.com/app/apikey"""
     
